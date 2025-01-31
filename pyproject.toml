@@ -1,0 +1,17 @@
+[project]
+name = "crypto-expert-llm"
+version = "0.1.0"
+description = "A fine-tuned of the distilled model `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` on crypto and web3 prompts."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "pydantic>=2.10.6",
+  "transformers>=4.48.1",
+  "datasets>=3.2.0",
+  "accelerate>=1.3.0",
+  "peft>=0.14.0",
+  "trl>=0.14.0",
+  "torch>=2.6.0",
+  "wandb>=0.19.5",
+  "tqdm",
+]
