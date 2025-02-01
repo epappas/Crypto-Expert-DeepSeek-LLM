@@ -108,8 +108,12 @@ def reward_training(
     train_file="reward_data.jsonl",
     output_dir="reward_rl_model",
 ) -> None:
+    base_model = AutoModelForCausalLM.from_pretrained(sft_model_dir)
     model = AutoModelForSequenceClassification.from_pretrained(
-        sft_model_dir, num_labels=1  # Output scalar reward
+        sft_model_dir,
+        num_labels=1,  # Output scalar reward
+        problem_type="regression",  # For scalar rewards
+        _attn_implementation="sdpa",  # Optional optimization
     )
     model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(sft_model_dir)
@@ -137,17 +141,30 @@ def reward_training(
 
     training_args = RewardConfig(
         output_dir=output_dir,
-        num_train_epochs=1,
-        per_device_train_batch_size=2,
+        num_train_epochs=3,
+        per_device_train_batch_size=4,
         gradient_accumulation_steps=4,
         save_steps=50,
         logging_steps=50,
         learning_rate=5e-5,
         disable_tqdm=False,
+        remove_unused_columns=False,
+        label_names=["labels"],
         report_to="wandb",
         evaluation_strategy="steps",
-        eval_steps=50,
+        eval_steps=200,
     )
+
+    def collate_fn(batch):
+        return {
+            "input_ids_chosen": tokenizer([b["chosen"] for b in batch], padding=True)[
+                "input_ids"
+            ],
+            "input_ids_rejected": tokenizer(
+                [b["rejected"] for b in batch], padding=True
+            )["input_ids"],
+            "labels": torch.zeros(len(batch)),
+        }
 
     trainer = RewardTrainer(
         model=model,
@@ -156,6 +173,7 @@ def reward_training(
         train_dataset=dataset,  # type: ignore
         peft_config=peft_config,  # type: ignore
         eval_dataset=val_dataset,  # type: ignore
+        data_collator=collate_fn,
     )
 
     trainer.train()
@@ -260,7 +278,7 @@ if __name__ == "__main__":
     # 1) Start Finetune
     start_finetune(
         base_model="deepseek-ai/deepseek-r1-distill-7b",
-        train_file="cold_start_data.jsonl",
+        train_file="crypto-expert.sft-data",
         output_dir="sft_model",
     )
 
