@@ -11,7 +11,7 @@ By focusing our fine-tuning on real-world crypto and DeFi scenarios, we aim to i
 
 ## Finetuning
 
-1. Put your fine-tuning .jsonl data in the `./json` folder.
+1. Put your fine-tuning `.jsonl` data in the `./json/` folder (eg `./json/crypto-expert.sft-data.jsonl`).
 2. Run the SFT phase by making the script executable if needed (`chmod +x finetune_pipeline.py`), then:
 
   ```bash
