@@ -14,18 +14,19 @@
 # ]
 # ///
 
-from tqdm import tqdm
 import torch
+import wandb
+
+from tqdm import tqdm
 from transformers import (
     AutoModelForCausalLM,
-    AutoModelForTokenClassification,
+    AutoModelForSequenceClassification,
     AutoTokenizer,
     pipeline,
 )
 from datasets import load_dataset, Dataset
 from peft.tuners.lora import LoraConfig
 from peft.utils.peft_types import TaskType
-
 from trl import (
     SFTTrainer,
     SFTConfig,
@@ -46,9 +47,11 @@ def start_finetune(
     output_dir="sft_model",
 ) -> None:
     model = AutoModelForCausalLM.from_pretrained(base_model)
+    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
-    dataset: Dataset = load_dataset("json", data_files=train_file, split="train")  # type: ignore
+    dataset: Dataset = load_dataset("json", data_files=train_file, split="train[:90%]")  # type: ignore
+    val_dataset: Dataset = load_dataset("json", data_files=train_file, split="train[90%:]")  # type: ignore
 
     response_template = " ### Answer:"
 
@@ -61,6 +64,16 @@ def start_finetune(
             output_texts.append(text)
         return output_texts
 
+    wandb.init(
+        project="crypto-llm-finetune",
+        config={
+            "phase": "SFT",
+            "base_model": base_model,
+            "batch_size": 2,
+            "learning_rate": 5e-5,
+        },
+    )
+
     training_args = SFTConfig(
         output_dir=output_dir,
         num_train_epochs=1,
@@ -70,11 +83,15 @@ def start_finetune(
         logging_steps=50,
         learning_rate=5e-5,
         disable_tqdm=False,
+        evaluation_strategy="steps",
+        eval_steps=100,
+        report_to="wandb",
     )
 
     trainer = SFTTrainer(
         model=model,
         train_dataset=dataset,
+        eval_dataset=val_dataset,
         formatting_func=formatting_prompts_func,
         data_collator=collator,
         args=training_args,
@@ -83,6 +100,7 @@ def start_finetune(
     trainer.train()
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
+    wandb.log_artifact(output_dir, type="model")
 
 
 def reward_training(
@@ -90,9 +108,13 @@ def reward_training(
     train_file="reward_data.jsonl",
     output_dir="reward_rl_model",
 ) -> None:
-    model = AutoModelForTokenClassification.from_pretrained(sft_model_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        sft_model_dir, num_labels=1  # Output scalar reward
+    )
+    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(sft_model_dir)
-    dataset = load_dataset("json", data_files=train_file, split="train")
+    dataset = load_dataset("json", data_files=train_file, split="train[:90%]")
+    val_dataset = load_dataset("json", data_files=train_file, split="train[90%:]")
 
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
@@ -100,6 +122,17 @@ def reward_training(
         r=8,
         lora_alpha=32,
         lora_dropout=0.1,
+    )
+
+    wandb.init(
+        project="crypto-llm-finetune",
+        config={
+            "phase": "Reward",
+            "base_model": sft_model_dir,
+            "lora_rank": 8,
+            "batch_size": 2,
+            "learning_rate": 5e-5,
+        },
     )
 
     training_args = RewardConfig(
@@ -111,6 +144,9 @@ def reward_training(
         logging_steps=50,
         learning_rate=5e-5,
         disable_tqdm=False,
+        report_to="wandb",
+        evaluation_strategy="steps",
+        eval_steps=50,
     )
 
     trainer = RewardTrainer(
@@ -119,25 +155,32 @@ def reward_training(
         processing_class=tokenizer,
         train_dataset=dataset,  # type: ignore
         peft_config=peft_config,  # type: ignore
+        eval_dataset=val_dataset,  # type: ignore
     )
 
     trainer.train()
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
+    wandb.log_artifact(output_dir, type="model")
 
 
 def final_rl_phase(
     rw_model_dir="reward_rl_model",
     final_data="final_data.jsonl",
     output_dir="final_rl_model",
-):
+) -> None:
     """
     https://medium.com/@chnwsw01/rlhf-with-trl-ppotrainer-6567f3e073a5
     https://huggingface.co/docs/trl/v0.7.4/en/ppo_trainer
     """
 
     model = AutoModelForCausalLMWithValueHead.from_pretrained(rw_model_dir)
-    rw_model = pipeline("text-classification", model=model)
+    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    rw_model = pipeline(
+        "text-classification",
+        model=model,
+        device=0 if torch.cuda.is_available() else -1,
+    )
     tokenizer = AutoTokenizer.from_pretrained(rw_model_dir)
     dataset = load_dataset("json", data_files=final_data, split="train")
 
@@ -145,18 +188,19 @@ def final_rl_phase(
     dataset = dataset.remove_columns(["response"])
 
     tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.add_special_tokens({"additional_special_tokens": ["### Answer:"]})  # type: ignore
 
     def tokenize(sample):
-        sample["input_ids"] = tokenizer.encode(sample["query"])
-        return sample
+        return tokenizer(sample["query"], truncation=True, max_length=512)
 
-    dataset = dataset.map(tokenize, batched=False)
+    dataset = dataset.map(tokenize, batched=True)
 
     config = PPOConfig(
         batch_size=16,
         learning_rate=1e-5,
         mini_batch_size=4,
         output_dir=output_dir,
+        report_to="wandb",
     )
     ppo_trainer = PPOTrainer(
         config,
@@ -165,6 +209,16 @@ def final_rl_phase(
         processing_class=tokenizer,
         ref_model=create_reference_model(model),
         reward_model=rw_model.model,
+    )
+
+    wandb.init(
+        project="crypto-llm-finetune",
+        config={
+            "phase": "Final",
+            "base_model": rw_model_dir,
+            "batch_size": 16,
+            "learning_rate": 1e-5,
+        },
     )
 
     generation_kwargs = {
@@ -184,37 +238,44 @@ def final_rl_phase(
         #### Compute reward score
         texts = [q + r for q, r in zip(batch["query"], batch["response"])]
         pipe_outputs = rw_model(texts)
-        rewards = [torch.tensor(output[1]["score"]) for output in pipe_outputs]  # type: ignore
+        rewards = [torch.tensor(output["score"]) for output in pipe_outputs]  # type: ignore
 
         #### Run PPO step
         stats = ppo_trainer.step(query_tensors, response_tensors, rewards)  # type: ignore
         ppo_trainer.log_stats(stats, batch, rewards)  # type: ignore
 
+        wandb.log(
+            {
+                "reward": torch.mean(torch.stack(rewards)).item(),
+                "ppo_loss": stats["ppo/loss/total"],
+            }
+        )
+
     ppo_trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
-    return output_dir
+    wandb.log_artifact(output_dir, type="model")
 
 
 if __name__ == "__main__":
     # 1) Start Finetune
-    sft_out = start_finetune(
+    start_finetune(
         base_model="deepseek-ai/deepseek-r1-distill-7b",
         train_file="cold_start_data.jsonl",
         output_dir="sft_model",
     )
 
     # 2) Reward RL
-    reward_rl_out = reward_training(
-        sft_model_dir="sft_out",
+    reward_training(
+        sft_model_dir="sft_model",
         train_file="reward_data.jsonl",
         output_dir="reward_rl_model",
     )
 
     # 3) Final RL Phase
-    final_rl_out = final_rl_phase(
+    final_rl_phase(
         rw_model_dir="reward_rl_model",
         final_data="final_data.jsonl",
         output_dir="final_rl_model",
     )
 
-    print("All done! Final model stored in:", final_rl_out)
+    print("All done! Final model stored in: final_rl_model")
