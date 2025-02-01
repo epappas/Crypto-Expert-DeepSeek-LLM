@@ -277,7 +277,7 @@ def final_rl_phase(
 if __name__ == "__main__":
     # 1) Start Finetune
     start_finetune(
-        base_model="deepseek-ai/deepseek-r1-distill-7b",
+        base_model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
         train_file="crypto-expert.sft-data",
         output_dir="sft_model",
     )
