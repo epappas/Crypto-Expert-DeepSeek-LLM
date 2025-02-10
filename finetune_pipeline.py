@@ -29,6 +29,7 @@ from transformers import (
 from datasets import load_dataset, Dataset
 from peft.tuners.lora import LoraConfig
 from peft.utils.peft_types import TaskType
+from peft.mapping import get_peft_model
 from trl import (
     SFTTrainer,
     SFTConfig,
@@ -59,15 +60,30 @@ def start_finetune(
         base_model,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
+        load_in_4bit=True,  # 4-bit quantization
+        device_map="auto",
     )
 
     if hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
+
+    # Add LoRA configuration
+    peft_config = LoraConfig(
+        r=8,
+        lora_alpha=32,
+        target_modules=["q_proj", "v_proj"],  # Adjust based on model architecture
+        lora_dropout=0.1,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()  # Optional: Check trainable params
+
     # if torch.cuda.is_available():
     #     model = model.half().to("cuda")
     # else:
     #     model = model.to("cpu")
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
@@ -97,9 +113,10 @@ def start_finetune(
 
     training_args = SFTConfig(
         output_dir=output_dir,
+        fp16=True,
         num_train_epochs=1,
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=4,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=8,
         save_steps=50,
         logging_steps=50,
         learning_rate=5e-5,
