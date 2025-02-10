@@ -150,12 +150,12 @@ def final_rl_phase(
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
     ).to(device)
 
-    model = PeftModel.from_pretrained(model, input_model_dir)
+    model = PeftModel.from_pretrained(model, input_model_dir, is_trainable=True)
     model = model.merge_and_unload()  # type: ignore
-
-    model.generation_config = base_model.generation_config
-    model.generation_config.eos_token_id = base_model.config.eos_token_id
-    model.generation_config.pad_token_id = base_model.config.pad_token_id
+    model = AutoModelForCausalLMWithValueHead.from_pretrained(
+        model,
+        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+    ).to(device)
 
     tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
     tokenizer.pad_token = tokenizer.eos_token
