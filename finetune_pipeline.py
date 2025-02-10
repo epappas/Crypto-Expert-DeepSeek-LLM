@@ -169,6 +169,30 @@ def reward_training(
         "json", data_dir="json", data_files=train_file, split="train[90%:]"
     )
 
+    def preprocess(sample):
+        # Tokenize the "chosen" field.
+        chosen_encoding = tokenizer(
+            sample["chosen"],
+            padding="max_length",
+            truncation=True,
+            max_length=max_length,
+        )
+        # Tokenize the "rejected" field.
+        rejected_encoding = tokenizer(
+            sample["rejected"],
+            padding="max_length",
+            truncation=True,
+            max_length=max_length,
+        )
+        sample["input_ids_chosen"] = chosen_encoding["input_ids"]
+        sample["input_ids_rejected"] = rejected_encoding["input_ids"]
+        # Optionally add a "labels" field if RewardTrainer expects one.
+        sample["labels"] = 0
+        return sample
+
+    dataset = dataset.map(preprocess)
+    val_dataset = val_dataset.map(preprocess)
+
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         inference_mode=False,
@@ -208,22 +232,22 @@ def reward_training(
         eval_steps=200,
     )
 
-    def collate_fn(batch):
-        return {
-            "input_ids_chosen": tokenizer(
-                [b["chosen"] for b in batch],
-                padding="max_length",
-                truncation=True,
-                max_length=max_length,
-            )["input_ids"],
-            "input_ids_rejected": tokenizer(
-                [b["rejected"] for b in batch],
-                padding="max_length",
-                truncation=True,
-                max_length=max_length,
-            )["input_ids"],
-            "labels": torch.zeros(len(batch)),
-        }
+    # def collate_fn(batch):
+    #     return {
+    #         "input_ids_chosen": tokenizer(
+    #             [b["chosen"] for b in batch],
+    #             padding="max_length",
+    #             truncation=True,
+    #             max_length=max_length,
+    #         )["input_ids"],
+    #         "input_ids_rejected": tokenizer(
+    #             [b["rejected"] for b in batch],
+    #             padding="max_length",
+    #             truncation=True,
+    #             max_length=max_length,
+    #         )["input_ids"],
+    #         "labels": torch.zeros(len(batch)),
+    #     }
 
     trainer = RewardTrainer(
         model=model,
@@ -232,7 +256,7 @@ def reward_training(
         train_dataset=dataset,  # type: ignore
         peft_config=peft_config,  # type: ignore
         eval_dataset=val_dataset,  # type: ignore
-        data_collator=collate_fn,
+        # data_collator=collate_fn,
     )
 
     trainer.train()
