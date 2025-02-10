@@ -24,6 +24,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     pipeline,
+    default_data_collator,
 )
 from datasets import load_dataset, Dataset
 from peft.tuners.lora import LoraConfig
@@ -141,28 +142,32 @@ def final_rl_phase(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = AutoModelForCausalLMWithValueHead.from_pretrained(
         input_model_dir,
-        device_map="auto",
+        device_map=None,  # Disable auto device mapping
+        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
     ).to(device)
-    # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
-    rw_model = pipeline(
-        "text-classification",
-        model=model,
-        tokenizer=tokenizer,
-        device=device if torch.cuda.is_available() else -1,
-    )
-    dataset = load_dataset(
-        "json", data_dir="json", data_files=train_file, split="train"
-    )
 
+    tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.add_special_tokens({"additional_special_tokens": ["### Answer:"]})  # type: ignore
+    max_length = tokenizer.model_max_length
+
+    dataset = load_dataset(
+        "json",
+        data_dir="json",
+        data_files=train_file,
+        split="train",
+    )
     dataset = dataset.rename_column("prompt", "query")
     dataset = dataset.remove_columns(["response"])
 
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.add_special_tokens({"additional_special_tokens": ["### Answer:"]})  # type: ignore
-
     def tokenize(sample):
-        return tokenizer(sample["query"], truncation=True, max_length=512)
+        return tokenizer(
+            sample["query"],
+            truncation=True,
+            max_length=max_length,
+            padding="max_length",
+            return_tensors="pt",
+        )
 
     dataset = dataset.map(tokenize, batched=True)
 
@@ -172,6 +177,8 @@ def final_rl_phase(
         mini_batch_size=4,
         output_dir=output_dir,
         report_to="wandb",
+        # use_score_scaling=True,
+        # use_score_norm=True,
     )
     ppo_trainer = PPOTrainer(
         config,
@@ -179,7 +186,7 @@ def final_rl_phase(
         train_dataset=dataset,  # type: ignore
         processing_class=tokenizer,
         ref_model=create_reference_model(model),
-        reward_model=rw_model.model,
+        data_collator=default_data_collator,
     )
 
     wandb.init(
@@ -198,18 +205,35 @@ def final_rl_phase(
         "top_p": 1.0,
         "do_sample": True,
         "pad_token_id": tokenizer.eos_token_id,
+        "max_new_tokens": 128,
+        "temperature": 0.7,
     }
 
-    for epoch, batch in tqdm(enumerate(ppo_trainer.dataloader)):
-        query_tensors = batch["input_ids"]
+    def get_rewards(texts):
+        inputs = tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt",
+        ).to(device)
 
-        response_tensors = ppo_trainer.generate(query_tensors, **generation_kwargs)  # type: ignore
+        with torch.no_grad():
+            outputs = model(**inputs)
+            rewards = outputs.value.flatten()
+
+        return rewards.cpu()
+
+    for epoch, batch in tqdm(enumerate(ppo_trainer.dataloader)):
+        query_tensors = batch["input_ids"].to(device)
+
+        response_tensors = ppo_trainer.generate(query_tensors, return_prompt=False, **generation_kwargs)  # type: ignore
         batch["response"] = [tokenizer.decode(r.squeeze()) for r in response_tensors]
 
         #### Compute reward score
         texts = [q + r for q, r in zip(batch["query"], batch["response"])]
-        pipe_outputs = rw_model(texts)
-        rewards = [torch.tensor(output["score"]) for output in pipe_outputs]  # type: ignore
+        rewards = get_rewards(texts)
+        rewards = [torch.tensor(r) for r in rewards]
 
         #### Run PPO step
         stats = ppo_trainer.step(query_tensors, response_tensors, rewards)  # type: ignore
@@ -219,6 +243,8 @@ def final_rl_phase(
             {
                 "reward": torch.mean(torch.stack(rewards)).item(),
                 "ppo_loss": stats["ppo/loss/total"],
+                "entropy": stats["objective/entropy"],
+                "kl_divergence": stats["objective/kl"],
             }
         )
 
