@@ -161,6 +161,7 @@ def reward_training(
     )
     # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(sft_model_dir)
+    max_length = tokenizer.model_max_length
     dataset = load_dataset(
         "json", data_dir="json", data_files=train_file, split="train[:90%]"
     )
@@ -192,6 +193,7 @@ def reward_training(
 
     training_args = RewardConfig(
         output_dir=output_dir,
+        max_length=max_length,
         num_train_epochs=3,
         per_device_train_batch_size=2,  # we need to keep this low to fit on our GPU memory
         fp16=True,  # I need to experiemnt with mixed precision training for faster training (memory savings)
@@ -208,11 +210,17 @@ def reward_training(
 
     def collate_fn(batch):
         return {
-            "input_ids_chosen": tokenizer([b["chosen"] for b in batch], padding=True)[
-                "input_ids"
-            ],
+            "input_ids_chosen": tokenizer(
+                [b["chosen"] for b in batch],
+                padding="max_length",
+                truncation=True,
+                max_length=max_length,
+            )["input_ids"],
             "input_ids_rejected": tokenizer(
-                [b["rejected"] for b in batch], padding=True
+                [b["rejected"] for b in batch],
+                padding="max_length",
+                truncation=True,
+                max_length=max_length,
             )["input_ids"],
             "labels": torch.zeros(len(batch)),
         }
