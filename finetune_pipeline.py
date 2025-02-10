@@ -69,7 +69,6 @@ def start_finetune(
     # if hasattr(model, "gradient_checkpointing_enable"):
     #     model.gradient_checkpointing_enable()
 
-    # Add LoRA configuration
     peft_config = LoraConfig(
         r=8,
         lora_alpha=32,
@@ -79,7 +78,7 @@ def start_finetune(
         task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()  # Optional: Check trainable params
+    model.print_trainable_parameters()
 
     # if torch.cuda.is_available():
     #     model = model.half().to("cuda")
@@ -151,11 +150,15 @@ def reward_training(
 ) -> None:
     model = AutoModelForSequenceClassification.from_pretrained(
         sft_model_dir,
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True,
+        load_in_4bit=True,  # 4-bit quantization
         num_labels=1,  # Output scalar reward
         problem_type="regression",  # For scalar rewards
         _attn_implementation="sdpa",  # Optional optimization
+        device_map="auto",
     )
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(sft_model_dir)
     dataset = load_dataset(
         "json", data_dir="json", data_files=train_file, split="train[:90%]"
@@ -171,6 +174,9 @@ def reward_training(
         lora_alpha=32,
         lora_dropout=0.1,
     )
+
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
 
     wandb.init(
         project="crypto-llm-finetune",
@@ -237,12 +243,17 @@ def final_rl_phase(
     https://huggingface.co/docs/trl/v0.7.4/en/ppo_trainer
     """
 
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(rw_model_dir)
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    model = AutoModelForCausalLMWithValueHead.from_pretrained(
+        rw_model_dir,
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True,
+        load_in_4bit=True,  # 4-bit quantization
+        device_map="auto",
+    )
+    # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     rw_model = pipeline(
         "text-classification",
         model=model,
-        device=0 if torch.cuda.is_available() else -1,
     )
     tokenizer = AutoTokenizer.from_pretrained(rw_model_dir)
     dataset = load_dataset(
