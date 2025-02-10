@@ -151,7 +151,7 @@ def reward_training(
         torch.cuda.empty_cache()
         gc.collect()
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = torch.cuda.current_device() if torch.cuda.is_available() else "cpu"
     model = AutoModelForSequenceClassification.from_pretrained(
         sft_model_dir,
         torch_dtype=torch.float16,
