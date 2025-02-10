@@ -89,8 +89,8 @@ def start_finetune(
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
-    dataset: Dataset = load_dataset("json", data_files=train_file, split="train[:90%]")  # type: ignore
-    val_dataset: Dataset = load_dataset("json", data_files=train_file, split="train[90%:]")  # type: ignore
+    dataset: Dataset = load_dataset("json", data_dir="json", data_files=train_file, split="train[:90%]")  # type: ignore
+    val_dataset: Dataset = load_dataset("json", data_dir="json", data_files=train_file, split="train[90%:]")  # type: ignore
 
     response_template = " ### Answer:"
 
@@ -157,8 +157,12 @@ def reward_training(
     )
     model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(sft_model_dir)
-    dataset = load_dataset("json", data_files=train_file, split="train[:90%]")
-    val_dataset = load_dataset("json", data_files=train_file, split="train[90%:]")
+    dataset = load_dataset(
+        "json", data_dir="json", data_files=train_file, split="train[:90%]"
+    )
+    val_dataset = load_dataset(
+        "json", data_dir="json", data_files=train_file, split="train[90%:]"
+    )
 
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
@@ -241,7 +245,9 @@ def final_rl_phase(
         device=0 if torch.cuda.is_available() else -1,
     )
     tokenizer = AutoTokenizer.from_pretrained(rw_model_dir)
-    dataset = load_dataset("json", data_files=train_file, split="train")
+    dataset = load_dataset(
+        "json", data_dir="json", data_files=train_file, split="train"
+    )
 
     dataset = dataset.rename_column("prompt", "query")
     dataset = dataset.remove_columns(["response"])
