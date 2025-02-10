@@ -17,6 +17,7 @@
 import os
 import torch
 import wandb
+import gc
 
 from tqdm import tqdm
 from transformers import (
@@ -44,20 +45,29 @@ from transformers import pipeline
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+    gc.collect()
+
+
 def start_finetune(
     base_model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
     train_file="crypto-expert.sft-data.jsonl",
     output_dir="sft_model",
 ) -> None:
-    model = AutoModelForCausalLM.from_pretrained(base_model)
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model,
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True,
+    )
 
     if hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
-    if torch.cuda.is_available():
-        model = model.half().to("cuda")
-    else:
-        model = model.to("cpu")
-    # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    # if torch.cuda.is_available():
+    #     model = model.half().to("cuda")
+    # else:
+    #     model = model.to("cpu")
+    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
