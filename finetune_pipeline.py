@@ -190,8 +190,9 @@ def reward_training(
             max_length=max_length,
         )
         sample["input_ids_chosen"] = chosen_encoding["input_ids"]
+        sample["attention_mask_chosen"] = chosen_encoding["attention_mask"]
         sample["input_ids_rejected"] = rejected_encoding["input_ids"]
-        # Optionally add a "labels" field if RewardTrainer expects one.
+        sample["attention_mask_rejected"] = rejected_encoding["attention_mask"]
         sample["labels"] = 0
         return sample
 
