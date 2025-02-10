@@ -1,0 +1,122 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+# Poetry's in-project virtual environments
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# dotenv
+.env
+.env.*
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# PyCharm
+.idea/
+# JetBrains specific directories
+*.idea/
+*.idea/*
+# VSCode
+.vscode/*
+!.vscode/launch.json
+
+# Local spark logs, metadata, and REPL history
+spark-warehouse/
+.metastore_db/
+derby.log
+
+# MacOS
+.DS_Store
+
+# Thumbnails
+._*
+
+# Files that might contain sensitive information, like API keys
+*.env
+
+# Editor backups
+*~
+*.swp
+*.swo
+
+# Poetry lock file (optional, if you want to exclude lock files)
+# This is generally recommended to commit, but include here if you choose to exclude
+# poetry.lock
+vendor/
+
+*.zip
+.venv
+vault.yaml
+
