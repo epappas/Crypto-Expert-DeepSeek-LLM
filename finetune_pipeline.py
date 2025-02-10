@@ -225,7 +225,7 @@ def reward_training(
 
 def final_rl_phase(
     rw_model_dir="reward_rl_model",
-    final_data="final_data.jsonl",
+    train_file="final_data.jsonl",
     output_dir="final_rl_model",
 ) -> None:
     """
@@ -241,7 +241,7 @@ def final_rl_phase(
         device=0 if torch.cuda.is_available() else -1,
     )
     tokenizer = AutoTokenizer.from_pretrained(rw_model_dir)
-    dataset = load_dataset("json", data_files=final_data, split="train")
+    dataset = load_dataset("json", data_files=train_file, split="train")
 
     dataset = dataset.rename_column("prompt", "query")
     dataset = dataset.remove_columns(["response"])
@@ -320,21 +320,21 @@ if __name__ == "__main__":
     # 1) Start Finetune
     start_finetune(
         base_model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-        train_file="crypto-expert.sft-data.jsonl",
+        train_file="json/crypto-expert.sft-data.jsonl",
         output_dir="sft_model",
     )
 
     # 2) Reward RL
     reward_training(
         sft_model_dir="sft_model",
-        train_file="reward_data.jsonl",
+        train_file="json/reward_data.jsonl",
         output_dir="reward_rl_model",
     )
 
     # 3) Final RL Phase
     final_rl_phase(
         rw_model_dir="reward_rl_model",
-        final_data="final_data.jsonl",
+        train_file="json/final_data.jsonl",
         output_dir="final_rl_model",
     )
 
