@@ -225,8 +225,8 @@ def reward_training(
         output_dir=output_dir,
         max_length=max_length,
         num_train_epochs=3,
-        per_device_train_batch_size=2,  # we need to keep this low to fit on our GPU memory
-        fp16=True,  # I need to experiemnt with mixed precision training for faster training (memory savings)
+        per_device_train_batch_size=1,
+        fp16=True,
         save_steps=50,
         logging_steps=50,
         learning_rate=5e-5,
