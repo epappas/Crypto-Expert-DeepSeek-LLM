@@ -14,6 +14,7 @@
 # ]
 # ///
 
+import os
 import torch
 import wandb
 
@@ -40,6 +41,8 @@ from trl import (
 )
 from transformers import pipeline
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 
 def start_finetune(
     base_model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
@@ -47,7 +50,15 @@ def start_finetune(
     output_dir="sft_model",
 ) -> None:
     model = AutoModelForCausalLM.from_pretrained(base_model)
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
+    if torch.cuda.is_available():
+        model = model.half().to("cuda")
+    else:
+        model = model.to("cpu")
+    # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
     dataset: Dataset = load_dataset("json", data_files=train_file, split="train[:90%]")  # type: ignore
@@ -108,7 +119,6 @@ def reward_training(
     train_file="reward_data.jsonl",
     output_dir="reward_rl_model",
 ) -> None:
-    base_model = AutoModelForCausalLM.from_pretrained(sft_model_dir)
     model = AutoModelForSequenceClassification.from_pretrained(
         sft_model_dir,
         num_labels=1,  # Output scalar reward
@@ -142,8 +152,8 @@ def reward_training(
     training_args = RewardConfig(
         output_dir=output_dir,
         num_train_epochs=3,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
+        per_device_train_batch_size=2,  # we need to keep this low to fit on our GPU memory
+        fp16=True,  # I need to experiemnt with mixed precision training for faster training (memory savings)
         save_steps=50,
         logging_steps=50,
         learning_rate=5e-5,
