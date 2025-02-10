@@ -143,11 +143,12 @@ def final_rl_phase(
         device_map="auto",
     )
     # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
     rw_model = pipeline(
         "text-classification",
         model=model,
+        tokenizer=tokenizer,
     )
-    tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
     dataset = load_dataset(
         "json", data_dir="json", data_files=train_file, split="train"
     )
