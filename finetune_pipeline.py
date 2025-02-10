@@ -148,6 +148,7 @@ def reward_training(
     train_file="reward_data.jsonl",
     output_dir="reward_rl_model",
 ) -> None:
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = AutoModelForSequenceClassification.from_pretrained(
         sft_model_dir,
         torch_dtype=torch.float16,
@@ -157,7 +158,8 @@ def reward_training(
         problem_type="regression",  # For scalar rewards
         _attn_implementation="sdpa",  # Optional optimization
         llm_int8_enable_fp32_cpu_offload=True,  # https://huggingface.co/docs/transformers/main/en/main_classes/quantization#offload-between-cpu-and-gpu
-        device_map="auto",
+        # device_map="auto",
+        device_map={"": device},
     )
     # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(sft_model_dir)
