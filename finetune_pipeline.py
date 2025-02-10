@@ -48,16 +48,15 @@ from transformers import pipeline
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-    gc.collect()
-
-
 def start_finetune(
     base_model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
     train_file="crypto-expert.sft-data.jsonl",
     output_dir="sft_model",
 ) -> None:
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        gc.collect()
+
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
         torch_dtype=torch.float16,
@@ -148,6 +147,10 @@ def reward_training(
     train_file="reward_data.jsonl",
     output_dir="reward_rl_model",
 ) -> None:
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        gc.collect()
+
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = AutoModelForSequenceClassification.from_pretrained(
         sft_model_dir,
@@ -277,6 +280,10 @@ def final_rl_phase(
     https://medium.com/@chnwsw01/rlhf-with-trl-ppotrainer-6567f3e073a5
     https://huggingface.co/docs/trl/v0.7.4/en/ppo_trainer
     """
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        gc.collect()
 
     model = AutoModelForCausalLMWithValueHead.from_pretrained(
         rw_model_dir,
