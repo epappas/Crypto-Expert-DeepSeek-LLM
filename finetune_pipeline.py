@@ -156,6 +156,7 @@ def reward_training(
         num_labels=1,  # Output scalar reward
         problem_type="regression",  # For scalar rewards
         _attn_implementation="sdpa",  # Optional optimization
+        llm_int8_enable_fp32_cpu_offload=True,  # https://huggingface.co/docs/transformers/main/en/main_classes/quantization#offload-between-cpu-and-gpu
         device_map="auto",
     )
     # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
