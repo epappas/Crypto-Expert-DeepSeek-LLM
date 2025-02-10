@@ -141,23 +141,12 @@ def final_rl_phase(
         gc.collect()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    base_model = AutoModelForCausalLM.from_pretrained(
-        "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",  # Original base model
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-    )
     model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        base_model,
+        input_model_dir,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
     ).to(device)
 
-    model = PeftModel.from_pretrained(model, input_model_dir, is_trainable=True)
-    model = model.merge_and_unload()  # type: ignore
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        model,
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-    ).to(device)
-
-    tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+    tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.add_special_tokens({"additional_special_tokens": ["### Answer:"]})  # type: ignore
     max_length = tokenizer.model_max_length
