@@ -187,7 +187,8 @@ def final_rl_phase(
         train_dataset=dataset,  # type: ignore
         processing_class=tokenizer,
         ref_model=create_reference_model(model),
-        data_collator=default_data_collator,
+        reward_model=model,
+        data_collator=default_data_collator,  # type: ignore
     )
 
     wandb.init(
