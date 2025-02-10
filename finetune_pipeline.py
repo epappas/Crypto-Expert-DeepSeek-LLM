@@ -238,23 +238,6 @@ def reward_training(
         eval_steps=200,
     )
 
-    # def collate_fn(batch):
-    #     return {
-    #         "input_ids_chosen": tokenizer(
-    #             [b["chosen"] for b in batch],
-    #             padding="max_length",
-    #             truncation=True,
-    #             max_length=max_length,
-    #         )["input_ids"],
-    #         "input_ids_rejected": tokenizer(
-    #             [b["rejected"] for b in batch],
-    #             padding="max_length",
-    #             truncation=True,
-    #             max_length=max_length,
-    #         )["input_ids"],
-    #         "labels": torch.zeros(len(batch)),
-    #     }
-
     trainer = RewardTrainer(
         model=model,
         args=training_args,
