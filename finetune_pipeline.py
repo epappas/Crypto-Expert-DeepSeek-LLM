@@ -320,7 +320,7 @@ if __name__ == "__main__":
     # 1) Start Finetune
     start_finetune(
         base_model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-        train_file="crypto-expert.sft-data",
+        train_file="crypto-expert.sft-data.jsonl",
         output_dir="sft_model",
     )
 
