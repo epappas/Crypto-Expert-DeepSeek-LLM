@@ -138,16 +138,18 @@ def final_rl_phase(
         torch.cuda.empty_cache()
         gc.collect()
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     model = AutoModelForCausalLMWithValueHead.from_pretrained(
         input_model_dir,
         device_map="auto",
-    )
+    ).to(device)
     # model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
     rw_model = pipeline(
         "text-classification",
         model=model,
         tokenizer=tokenizer,
+        device=device if torch.cuda.is_available() else -1,
     )
     dataset = load_dataset(
         "json", data_dir="json", data_files=train_file, split="train"
