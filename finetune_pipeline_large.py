@@ -158,7 +158,8 @@ def final_rl_phase(
         split="train",
     )
     dataset = dataset.rename_column("prompt", "query")
-    dataset = dataset.remove_columns(["response"])
+    dataset = dataset.rename_column("chosen", "response")
+    dataset = dataset.remove_columns(["rejected"])
 
     def tokenize(sample):
         return tokenizer(
