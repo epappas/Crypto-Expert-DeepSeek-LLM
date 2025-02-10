@@ -66,8 +66,8 @@ def start_finetune(
         device_map="auto",
     )
 
-    if hasattr(model, "gradient_checkpointing_enable"):
-        model.gradient_checkpointing_enable()
+    # if hasattr(model, "gradient_checkpointing_enable"):
+    #     model.gradient_checkpointing_enable()
 
     # Add LoRA configuration
     peft_config = LoraConfig(
