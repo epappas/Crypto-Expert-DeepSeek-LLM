@@ -140,11 +140,16 @@ def final_rl_phase(
         gc.collect()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    base_model = AutoModelForCausalLM.from_pretrained(input_model_dir)
     model = AutoModelForCausalLMWithValueHead.from_pretrained(
         input_model_dir,
         device_map=None,  # Disable auto device mapping
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
     ).to(device)
+
+    model.generation_config = base_model.generation_config
+    model.generation_config.eos_token_id = base_model.config.eos_token_id
+    model.generation_config.pad_token_id = base_model.config.pad_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(input_model_dir)
     tokenizer.pad_token = tokenizer.eos_token
