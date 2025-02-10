@@ -112,6 +112,7 @@ def start_finetune(
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
     wandb.log_artifact(output_dir, type="model")
+    wandb.finish()
 
 
 def reward_training(
@@ -190,6 +191,7 @@ def reward_training(
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
     wandb.log_artifact(output_dir, type="model")
+    wandb.finish()
 
 
 def final_rl_phase(
@@ -282,6 +284,7 @@ def final_rl_phase(
     ppo_trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
     wandb.log_artifact(output_dir, type="model")
+    wandb.finish()
 
 
 if __name__ == "__main__":
